@@ -1,0 +1,66 @@
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { AuthService } from './auth/auth.service';
+import { InvoicesService } from './invoices/invoices.service';
+import { UserRole, Currency, InvoiceStatus } from '@bookkeeping/shared';
+import { CreateInvoiceDto } from './invoices/dto/create-invoice.dto';
+
+async function bootstrap() {
+    const app = await NestFactory.createApplicationContext(AppModule);
+    const authService = app.get(AuthService);
+    const invoicesService = app.get(InvoicesService);
+
+    console.log('Seeding database...');
+
+    // 1. Create Users
+    console.log('Creating users...');
+    const adminUser = await authService.register({
+        email: 'admin@example.com',
+        password: 'password123',
+        fullName: 'Admin User',
+        role: UserRole.ADMIN,
+    });
+
+    const normalUser = await authService.register({
+        email: 'user@example.com',
+        password: 'password123',
+        fullName: 'John Doe',
+        role: UserRole.USER,
+    });
+
+    console.log('Users created:', adminUser.user.email, normalUser.user.email);
+
+    // 2. Create Invoices for Normal User
+    console.log('Creating invoices...');
+    const invoice1: CreateInvoiceDto = {
+        customerId: normalUser.user.id, // Self for now, or mock customer
+        date: new Date().toISOString(),
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        currency: Currency.AED,
+        items: [
+            { description: 'Consulting Services', quantity: 10, unitPrice: 500, taxRate: 5 },
+            { description: 'Software License', quantity: 1, unitPrice: 1000, taxRate: 5 },
+        ],
+        notes: 'Initial project invoice',
+    };
+
+    const invoice2: CreateInvoiceDto = {
+        customerId: normalUser.user.id,
+        date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+        dueDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+        currency: Currency.USD,
+        items: [
+            { description: 'Web Development', quantity: 1, unitPrice: 2000, taxRate: 0 },
+        ],
+        notes: 'Export service (0% VAT)',
+    };
+
+    await invoicesService.create(invoice1);
+    await invoicesService.create(invoice2);
+
+    console.log('Invoices created.');
+    console.log('Seeding complete!');
+    await app.close();
+}
+
+bootstrap();

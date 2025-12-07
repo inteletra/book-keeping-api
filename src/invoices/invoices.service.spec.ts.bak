@@ -1,0 +1,67 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { InvoicesService } from './invoices.service';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Invoice } from './entities/invoice.entity';
+import { InvoiceItem } from './entities/invoice-item.entity';
+import { CreateInvoiceDto } from './dto/create-invoice.dto';
+import { InvoiceStatus, Currency } from '@bookkeeping/shared';
+import { User } from '../users/entities/user.entity';
+
+describe('InvoicesService', () => {
+    let service: InvoicesService;
+    let invoiceRepository: any;
+
+    const mockInvoiceRepository = {
+        create: jest.fn().mockImplementation((dto) => dto),
+        save: jest.fn().mockImplementation((invoice) => Promise.resolve({ id: '1', ...invoice })),
+        find: jest.fn(),
+        findOne: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+    };
+
+    const mockUser = { id: 'user-1', company: { id: 'company-1' } } as User;
+
+    beforeEach(async () => {
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                InvoicesService,
+                {
+                    provide: getRepositoryToken(Invoice),
+                    useValue: mockInvoiceRepository,
+                },
+                {
+                    provide: getRepositoryToken(InvoiceItem),
+                    useValue: {},
+                },
+            ],
+        }).compile();
+
+        service = module.get<InvoicesService>(InvoicesService);
+        invoiceRepository = module.get(getRepositoryToken(Invoice));
+    });
+
+    it('should be defined', () => {
+        expect(service).toBeDefined();
+    });
+
+    describe('create', () => {
+        it('should calculate totals and VAT correctly', async () => {
+            const createInvoiceDto: CreateInvoiceDto = {
+                customerId: 'customer-123',
+                date: new Date().toISOString(),
+                dueDate: new Date().toISOString(),
+                currency: Currency.AED,
+                items: [
+                    { description: 'Test Item', quantity: 1, unitPrice: 100, taxRate: 5 },
+                ],
+            };
+
+            const result = await service.create(createInvoiceDto);
+
+            expect(result.subtotal).toBe(100);
+            expect(result.taxTotal).toBe(5);
+            expect(result.total).toBe(105);
+            expect(result.invoiceNumber).toBe('INV-001');
+        });
+    });
+});
